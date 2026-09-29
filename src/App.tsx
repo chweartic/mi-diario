@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, doc, setDoc, onSnapshot, collection, query, getDocs } from 'firebase/firestore';
+import { getAuth, signInAnonymously, onAuthStateChanged, User } from 'firebase/auth';
+import { getFirestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
 
 // --- CONFIGURACIÓN FIREBASE ---
 const firebaseConfig = {
@@ -25,7 +25,7 @@ const globalStyles = `
   body {
     margin: 0;
     padding: 0;
-    background-color: #EFEBE4; /* Fondo grisáceo del borde exterior */
+    background-color: #EFEBE4;
     font-family: 'Playfair Display', serif;
     color: #4A5568;
   }
@@ -38,7 +38,6 @@ const globalStyles = `
     font-family: 'Great Vibes', cursive;
   }
 
-  /* Scrollbar bonita para el interior */
   ::-webkit-scrollbar {
     width: 8px;
   }
@@ -52,7 +51,7 @@ const globalStyles = `
 `;
 
 // --- HELPER FECHAS ---
-const getFormattedDate = (dateString) => {
+const getFormattedDate = (dateString: string) => {
   const date = new Date(dateString);
   const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
   const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -70,26 +69,24 @@ const getFormattedDate = (dateString) => {
 };
 
 export default function App() {
-  const [user, setUser] = useState(null);
-  const [isOpen, setIsOpen] = useState(false); // Controla si estamos en portada o dentro
-  const [currentDate, setCurrentDate] = useState(new Date().toISOString().split('T')[0]);
-  const [saving, setSaving] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [isOpen, setIsOpen] = useState<boolean>(false);
+  const [currentDate, setCurrentDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [saving, setSaving] = useState<boolean>(false);
   
-  const [buenas, setBuenas] = useState(["", "", "", "", ""]);
-  const [malas, setMalas] = useState(["", "", "", "", ""]);
-  
-  const [entradasPasadas, setEntradasPasadas] = useState([]);
+  const [buenas, setBuenas] = useState<string[]>(["", "", "", "", ""]);
+  const [malas, setMalas] = useState<string[]>(["", "", "", "", ""]);
 
   // Autenticación
   useEffect(() => {
     signInAnonymously(auth).catch(console.error);
-    const unsubscribe = onAuthStateChanged(auth, (u) => setUser(u));
+    const unsubscribe = onAuthStateChanged(auth, (u: User | null) => setUser(u));
     return () => unsubscribe();
   }, []);
 
-  // Cargar datos del día seleccionado
+  // Cargar datos
   useEffect(() => {
-    if (!user) return;
+    if (!user?.uid) return;
     const unsub = onSnapshot(doc(db, "diarios", `${user.uid}_${currentDate}`), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
@@ -103,19 +100,18 @@ export default function App() {
     return () => unsub();
   }, [user, currentDate]);
 
-  // Guardar datos (auto-guardado al escribir)
+  // Guardar datos
   useEffect(() => {
-    if (!user || !isOpen) return;
+    if (!user?.uid || !isOpen) return;
     const saveTimer = setTimeout(async () => {
       setSaving(true);
       await setDoc(doc(db, "diarios", `${user.uid}_${currentDate}`), { buenas, malas });
       setTimeout(() => setSaving(false), 500);
-    }, 1000); // Guarda 1 segundo después de dejar de teclear
+    }, 1000);
     return () => clearTimeout(saveTimer);
   }, [buenas, malas, currentDate, user, isOpen]);
 
-
-  const updateArray = (setter, array, index, value) => {
+  const updateArray = (setter: (val: string[]) => void, array: string[], index: number, value: string) => {
     const newArray = [...array];
     newArray[index] = value;
     setter(newArray);
@@ -125,7 +121,6 @@ export default function App() {
     setCurrentDate(new Date().toISOString().split('T')[0]);
   };
 
-  // --- VISTA PORTADA ---
   if (!isOpen) {
     return (
       <>
@@ -137,7 +132,6 @@ export default function App() {
             boxShadow: '0 10px 40px rgba(0,0,0,0.1)',
             display: 'flex'
           }}>
-            {/* Menú lateral simulado (portada) */}
             <div style={{ width: '280px', backgroundColor: '#F8F6F0', borderRight: '1px solid #E2DCD0', padding: '30px' }}>
               <div style={{ textAlign: 'center', marginBottom: '40px' }}>
                 <h1 style={{ margin: 0, color: '#B04A5A', lineHeight: '0.8' }}>
@@ -154,7 +148,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Zona central (Rayas y cartel) */}
             <div style={{ 
               flex: 1, 
               backgroundImage: 'repeating-linear-gradient(to right, #9BA6C7, #9BA6C7 45px, #FFFFFF 45px, #FFFFFF 90px)',
@@ -191,7 +184,6 @@ export default function App() {
     );
   }
 
-  // --- VISTA INTERIOR (DIARIO ABIERTO) ---
   return (
     <>
       <style>{globalStyles}</style>
@@ -202,7 +194,6 @@ export default function App() {
           boxShadow: '0 10px 40px rgba(0,0,0,0.1)', display: 'flex'
         }}>
           
-          {/* Menú lateral izquierdo */}
           <div style={{ width: '260px', backgroundColor: '#F5F2EA', borderRight: '1px solid #E6DFD3', padding: '30px 20px', display: 'flex', flexDirection: 'column' }}>
             <div style={{ textAlign: 'center', marginBottom: '40px', cursor: 'pointer' }} onClick={() => setIsOpen(false)}>
               <h1 style={{ margin: 0, color: '#B04A5A', lineHeight: '0.8' }}>
@@ -225,7 +216,6 @@ export default function App() {
             <div style={{ flex: 1, overflowY: 'auto' }}>
               <p style={{ fontSize: '10px', color: '#999', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '15px' }}>Entradas pasadas</p>
               
-              {/* Buscador de fechas manual para entradas pasadas */}
               <div style={{ marginBottom: '15px' }}>
                  <input 
                   type="date" 
@@ -244,20 +234,16 @@ export default function App() {
             </div>
           </div>
 
-          {/* Área de escritura principal */}
           <div style={{ flex: 1, padding: '50px 60px', overflowY: 'auto', position: 'relative' }}>
             
-            {/* Indicador de guardado discreto */}
             {saving && <span style={{ position: 'absolute', top: '20px', right: '30px', fontSize: '12px', color: '#999', fontStyle: 'italic' }}>Guardando...</span>}
 
-            {/* Cabecera Fecha */}
             <div style={{ borderBottom: '1px solid #EAE1D5', paddingBottom: '20px', marginBottom: '40px', textAlign: 'center', color: '#5A5A5A' }}>
               <h2 style={{ margin: 0, fontWeight: 'normal' }}>
                 {getFormattedDate(currentDate)}
               </h2>
             </div>
 
-            {/* 5 Cosas Buenas */}
             <div style={{ marginBottom: '40px' }}>
               <h3 style={{ fontSize: '18px', color: '#2C3E50', fontWeight: '600', marginBottom: '20px' }}>5 cosas buenas</h3>
               {buenas.map((item, i) => (
@@ -278,7 +264,6 @@ export default function App() {
               ))}
             </div>
 
-            {/* 5 Cosas Malas */}
             <div style={{ marginBottom: '40px' }}>
               <h3 style={{ fontSize: '18px', color: '#2C3E50', fontWeight: '600', marginBottom: '20px' }}>5 cosas malas</h3>
               {malas.map((item, i) => (
