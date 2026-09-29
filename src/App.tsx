@@ -52,7 +52,7 @@ const globalStyles = `
 
 // --- HELPER FECHAS ---
 const getFormattedDate = (dateString: string) => {
-  const date = new Date(dateString);
+  const date = new Date(dateString + 'T00:00:00'); // Evita desfases horarios
   const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
   const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
   
@@ -76,6 +76,7 @@ export default function App() {
   
   const [buenas, setBuenas] = useState<string[]>(["", "", "", "", ""]);
   const [malas, setMalas] = useState<string[]>(["", "", "", "", ""]);
+  const [ratings, setRatings] = useState({ familia: 0, amigos: 0, novio: 0, general: 0 });
 
   // Autenticación
   useEffect(() => {
@@ -84,7 +85,7 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Cargar datos
+  // Cargar datos al cambiar de fecha
   useEffect(() => {
     if (!user?.uid) return;
     const unsub = onSnapshot(doc(db, "diarios", `${user.uid}_${currentDate}`), (docSnap) => {
@@ -92,24 +93,27 @@ export default function App() {
         const data = docSnap.data();
         setBuenas(data.buenas || ["", "", "", "", ""]);
         setMalas(data.malas || ["", "", "", "", ""]);
+        setRatings(data.ratings || { familia: 0, amigos: 0, novio: 0, general: 0 });
       } else {
+        // Si no hay datos para ese día, limpiamos los campos para que salgan vacíos
         setBuenas(["", "", "", "", ""]);
         setMalas(["", "", "", "", ""]);
+        setRatings({ familia: 0, amigos: 0, novio: 0, general: 0 });
       }
     });
     return () => unsub();
   }, [user, currentDate]);
 
-  // Guardar datos
+  // Guardar datos automáticamente al escribir o valorar
   useEffect(() => {
     if (!user?.uid || !isOpen) return;
     const saveTimer = setTimeout(async () => {
       setSaving(true);
-      await setDoc(doc(db, "diarios", `${user.uid}_${currentDate}`), { buenas, malas });
+      await setDoc(doc(db, "diarios", `${user.uid}_${currentDate}`), { buenas, malas, ratings });
       setTimeout(() => setSaving(false), 500);
-    }, 1000);
+    }, 800);
     return () => clearTimeout(saveTimer);
-  }, [buenas, malas, currentDate, user, isOpen]);
+  }, [buenas, malas, ratings, currentDate, user, isOpen]);
 
   const updateArray = (setter: (val: string[]) => void, array: string[], index: number, value: string) => {
     const newArray = [...array];
@@ -120,6 +124,28 @@ export default function App() {
   const handleEscribirHoy = () => {
     setCurrentDate(new Date().toISOString().split('T')[0]);
   };
+
+  const StarRating = ({ label, field }: { label: string; field: keyof typeof ratings }) => (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '15px', marginBottom: '10px', color: '#555', maxWidth: '350px' }}>
+      <span style={{ fontFamily: '"Playfair Display", serif' }}>{label}</span>
+      <div style={{ display: 'flex', gap: '6px' }}>
+        {[1, 2, 3, 4, 5].map((star) => (
+          <span 
+            key={star} 
+            onClick={() => setRatings({ ...ratings, [field]: star })}
+            style={{ 
+              cursor: 'pointer', 
+              opacity: ratings[field] >= star ? 1 : 0.25,
+              fontSize: '18px',
+              transition: 'opacity 0.2s'
+            }}
+          >
+            ✨
+          </span>
+        ))}
+      </div>
+    </div>
+  );
 
   if (!isOpen) {
     return (
@@ -189,11 +215,12 @@ export default function App() {
       <style>{globalStyles}</style>
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
         <div style={{ 
-          width: '100%', maxWidth: '1000px', height: '80vh', minHeight: '600px',
+          width: '100%', maxWidth: '1000px', height: '85vh', minHeight: '650px',
           backgroundColor: '#FCFAF6', borderRadius: '16px', overflow: 'hidden',
           boxShadow: '0 10px 40px rgba(0,0,0,0.1)', display: 'flex'
         }}>
           
+          {/* Menú lateral izquierdo */}
           <div style={{ width: '260px', backgroundColor: '#F5F2EA', borderRight: '1px solid #E6DFD3', padding: '30px 20px', display: 'flex', flexDirection: 'column' }}>
             <div style={{ textAlign: 'center', marginBottom: '40px', cursor: 'pointer' }} onClick={() => setIsOpen(false)}>
               <h1 style={{ margin: 0, color: '#B04A5A', lineHeight: '0.8' }}>
@@ -214,7 +241,7 @@ export default function App() {
             </button>
 
             <div style={{ flex: 1, overflowY: 'auto' }}>
-              <p style={{ fontSize: '10px', color: '#999', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '15px' }}>Entradas pasadas</p>
+              <p style={{ fontSize: '10px', color: '#999', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '15px' }}>Seleccionar Fecha</p>
               
               <div style={{ marginBottom: '15px' }}>
                  <input 
@@ -224,30 +251,33 @@ export default function App() {
                   style={{ 
                     width: '100%', padding: '8px', border: '1px solid #E6DFD3', 
                     borderRadius: '6px', backgroundColor: 'transparent',
-                    fontFamily: 'inherit', color: '#666', fontSize: '13px'
+                    fontFamily: 'inherit', color: '#666', fontSize: '13px', cursor: 'pointer'
                   }}
                 />
               </div>
               <p style={{ fontSize: '12px', fontStyle: 'italic', color: '#999', lineHeight: '1.4' }}>
-                Selecciona una fecha arriba para ver o editar la entrada de ese día.
+                Cambia la fecha arriba para ver o rellenar las entradas de otros días.
               </p>
             </div>
           </div>
 
-          <div style={{ flex: 1, padding: '50px 60px', overflowY: 'auto', position: 'relative' }}>
+          {/* Área principal */}
+          <div style={{ flex: 1, padding: '40px 60px', overflowY: 'auto', position: 'relative' }}>
             
             {saving && <span style={{ position: 'absolute', top: '20px', right: '30px', fontSize: '12px', color: '#999', fontStyle: 'italic' }}>Guardando...</span>}
 
-            <div style={{ borderBottom: '1px solid #EAE1D5', paddingBottom: '20px', marginBottom: '40px', textAlign: 'center', color: '#5A5A5A' }}>
+            {/* Cabecera Fecha */}
+            <div style={{ borderBottom: '1px solid #EAE1D5', paddingBottom: '20px', marginBottom: '30px', textAlign: 'center', color: '#5A5A5A' }}>
               <h2 style={{ margin: 0, fontWeight: 'normal' }}>
                 {getFormattedDate(currentDate)}
               </h2>
             </div>
 
-            <div style={{ marginBottom: '40px' }}>
-              <h3 style={{ fontSize: '18px', color: '#2C3E50', fontWeight: '600', marginBottom: '20px' }}>5 cosas buenas</h3>
+            {/* 5 Cosas Buenas */}
+            <div style={{ marginBottom: '30px' }}>
+              <h3 style={{ fontSize: '18px', color: '#2C3E50', fontWeight: '600', marginBottom: '15px' }}>5 cosas buenas</h3>
               {buenas.map((item, i) => (
-                <div key={`buena-${i}`} style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '15px' }}>
+                <div key={`buena-${i}`} style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '12px' }}>
                   <span style={{ color: '#D48694', fontSize: '14px' }}>●</span>
                   <input 
                     type="text" 
@@ -256,7 +286,7 @@ export default function App() {
                     placeholder={`Cosa buena ${i + 1}...`}
                     style={{ 
                       width: '100%', border: 'none', backgroundColor: 'transparent', 
-                      padding: '5px 0', fontSize: '16px', fontFamily: 'inherit', 
+                      padding: '4px 0', fontSize: '15px', fontFamily: 'inherit', 
                       color: '#606F7B', outline: 'none' 
                     }}
                   />
@@ -264,10 +294,11 @@ export default function App() {
               ))}
             </div>
 
-            <div style={{ marginBottom: '40px' }}>
-              <h3 style={{ fontSize: '18px', color: '#2C3E50', fontWeight: '600', marginBottom: '20px' }}>5 cosas malas</h3>
+            {/* 5 Cosas Malas */}
+            <div style={{ marginBottom: '30px' }}>
+              <h3 style={{ fontSize: '18px', color: '#2C3E50', fontWeight: '600', marginBottom: '15px' }}>5 cosas malas</h3>
               {malas.map((item, i) => (
-                <div key={`mala-${i}`} style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '15px' }}>
+                <div key={`mala-${i}`} style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '12px' }}>
                   <span style={{ color: '#5A6B7C', fontSize: '14px' }}>●</span>
                   <input 
                     type="text" 
@@ -276,12 +307,20 @@ export default function App() {
                     placeholder={`Cosa mala ${i + 1}...`}
                     style={{ 
                       width: '100%', border: 'none', backgroundColor: 'transparent', 
-                      padding: '5px 0', fontSize: '16px', fontFamily: 'inherit', 
+                      padding: '4px 0', fontSize: '15px', fontFamily: 'inherit', 
                       color: '#606F7B', outline: 'none' 
                     }}
                   />
                 </div>
               ))}
+            </div>
+
+            {/* Valoraciones con Estrellas */}
+            <div style={{ borderTop: '1px solid #EAE1D5', paddingTop: '20px', marginTop: '20px' }}>
+              <StarRating label="Familia" field="familia" />
+              <StarRating label="Amigos" field="amigos" />
+              <StarRating label="Novio" field="novio" />
+              <StarRating label="Sentimientos generales" field="general" />
             </div>
 
           </div>
