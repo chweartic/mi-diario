@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged, User } from 'firebase/auth';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
 
 // --- CONFIGURACIÓN FIREBASE ---
@@ -69,7 +69,7 @@ const getFormattedDate = (dateString: string) => {
 };
 
 export default function App() {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<any>(null);
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [currentDate, setCurrentDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [saving, setSaving] = useState<boolean>(false);
@@ -80,7 +80,7 @@ export default function App() {
   // Autenticación
   useEffect(() => {
     signInAnonymously(auth).catch(console.error);
-    const unsubscribe = onAuthStateChanged(auth, (u: User | null) => setUser(u));
+    const unsubscribe = onAuthStateChanged(auth, (u: any) => setUser(u));
     return () => unsubscribe();
   }, []);
 
